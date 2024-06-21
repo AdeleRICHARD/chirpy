@@ -17,14 +17,14 @@ func main() {
 
 	// Register other handlers directly
 	httpMux.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(http.Dir("assets"))))
-	httpMux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	httpMux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(200)
 		w.Write([]byte("OK"))
 	})
 
-	httpMux.HandleFunc("/metrics", apiCfg.metricsHandler)
-	httpMux.HandleFunc("/reset", apiCfg.resetHandler)
+	httpMux.HandleFunc("GET /api/metrics", apiCfg.metricsHandler)
+	httpMux.HandleFunc("/api/reset", apiCfg.resetHandler)
 
 	// Start the server
 	serve := http.Server{
