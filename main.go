@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -17,13 +19,16 @@ func main() {
 
 	// Register other handlers directly
 	httpMux.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(http.Dir("assets"))))
+	httpMux.HandleFunc("GET /admin/metrics", apiCfg.metricsHandler)
+
 	httpMux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(200)
 		w.Write([]byte("OK"))
 	})
 
-	httpMux.HandleFunc("GET /api/metrics", apiCfg.metricsHandler)
+	httpMux.HandleFunc("POST /api/validate_chirp", apiCfg.validateHandler)
+
 	httpMux.HandleFunc("/api/reset", apiCfg.resetHandler)
 
 	// Start the server
@@ -50,12 +55,78 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
-	hitsResp := fmt.Sprintf("Hits: %d\n", cfg.fileserverHits)
-	w.Write([]byte(hitsResp))
+
+	htmlTemplate := `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome</title>
+</head>
+<body>
+    <h1>Welcome, Chirpy Admin</h1>
+    <p>Chirpy has been visited %d times!</p>
+</body>
+</html>`
+
+	htmlAdmin := fmt.Sprintf(htmlTemplate, cfg.fileserverHits)
+
+	w.Write([]byte(htmlAdmin))
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-Type", "text/html")
 }
 
 func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 	cfg.fileserverHits = 0
 	w.Write([]byte("OK"))
 	w.WriteHeader(200)
+}
+
+func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	msg, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+
+	type requestBody struct {
+		Body string `json:"body"`
+	}
+
+	params := requestBody{}
+	err = json.Unmarshal(msg, &params)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+
+	if len(params.Body) > 140 {
+		respondWithError(w, 400, "Chirp is too long")
+		return
+	}
+
+	type responseBody struct {
+		Valid bool `json:"valid"`
+	}
+
+	respondWithJson(w, 200, responseBody{
+		Valid: true,
+	})
+}
+
+func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {
+	response, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control'Allow-Origin", "*")
+	w.WriteHeader(code)
+	w.Write(response)
+	return nil
+}
+
+func respondWithError(w http.ResponseWriter, code int, msg string) error {
+	return respondWithJson(w, code, map[string]string{"error": msg})
 }
