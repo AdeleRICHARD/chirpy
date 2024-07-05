@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
+	"strings"
 )
 
 func main() {
@@ -28,6 +30,7 @@ func main() {
 	})
 
 	httpMux.HandleFunc("POST /api/validate_chirp", apiCfg.validateHandler)
+	httpMux.HandleFunc("POST /api/chirps", apiCfg.Chirps)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.resetHandler)
 
@@ -106,13 +109,29 @@ func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	bodyCleaned, isCleaned := removeBadWords(params.Body)
+
 	type responseBody struct {
-		Valid bool `json:"valid"`
+		Body  string `json:"cleaned_body"`
+		Extra string `json:"extra,omitempty"`
+	}
+
+	if isCleaned {
+		respondWithJson(w, 200, responseBody{
+			Body:  bodyCleaned,
+			Extra: "this should be ignored",
+		})
+		return
 	}
 
 	respondWithJson(w, 200, responseBody{
-		Valid: true,
+		Body: bodyCleaned,
 	})
+
+}
+
+func (cfg *apiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {
@@ -129,4 +148,22 @@ func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error
 
 func respondWithError(w http.ResponseWriter, code int, msg string) error {
 	return respondWithJson(w, code, map[string]string{"error": msg})
+}
+
+func removeBadWords(sentence string) (string, bool) {
+	var isCleaned []bool
+	badWords := []string{"kerfuffle", "sharbert", "fornax"}
+	for _, word := range strings.Split(sentence, " ") {
+		wordLower := strings.ToLower(word)
+		if slices.Contains(badWords, wordLower) {
+			sentence = strings.ReplaceAll(sentence, word, "****")
+			isCleaned = append(isCleaned, true)
+		}
+	}
+
+	if slices.Contains(isCleaned, true) {
+		return sentence, true
+	}
+
+	return sentence, false
 }
