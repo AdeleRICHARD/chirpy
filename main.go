@@ -29,7 +29,6 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	httpMux.HandleFunc("POST /api/validate_chirp", apiCfg.validateHandler)
 	httpMux.HandleFunc("POST /api/chirps", apiCfg.Chirps)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.resetHandler)
@@ -84,7 +83,7 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 }
 
-func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	msg, err := io.ReadAll(r.Body)
@@ -109,29 +108,23 @@ func (cfg *apiConfig) validateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bodyCleaned, isCleaned := removeBadWords(params.Body)
+	//bodyCleaned, isCleaned := removeBadWords(params.Body)
 
 	type responseBody struct {
-		Body  string `json:"cleaned_body"`
-		Extra string `json:"extra,omitempty"`
+		ID   int    `json:"id"`
+		Body string `json:"cleaned_body"`
 	}
 
-	if isCleaned {
+	/* if isCleaned {
 		respondWithJson(w, 200, responseBody{
-			Body:  bodyCleaned,
-			Extra: "this should be ignored",
+			Body: bodyCleaned,
 		})
 		return
 	}
 
 	respondWithJson(w, 200, responseBody{
 		Body: bodyCleaned,
-	})
-
-}
-
-func (cfg *apiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
-
+	}) */
 }
 
 func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {
