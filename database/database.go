@@ -1,6 +1,10 @@
 package database
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/rs/zerolog/log"
+)
 
 type DB struct {
 	path string
@@ -24,7 +28,22 @@ func NewDB(path string) (*DB, error) {
 
 // CreateChirp creates a new chirp and saves it to disk
 func (db *DB) CreateChirp(body string) (Chirp, error) {
-	return Chirp{}, nil
+	var newChirp Chirp
+	idToUse, err := db.GetChirp()
+	if err != nil {
+		log.Warn("No chirp in database for now")
+		newChirp.Body = body
+		newChirp.ID = 1
+
+		//write to database
+
+		return newChirp, nil
+	}
+
+	newChirp.ID = idToUse[len(idToUse)-1].ID + 1
+	newChirp.Body = body
+
+	return newChirp, nil
 }
 
 // GetChirps returns all chirps in the database

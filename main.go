@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+
+	"github.com/AdeleRICHARD/database"
 )
 
 func main() {
@@ -30,6 +32,7 @@ func main() {
 	})
 
 	httpMux.HandleFunc("POST /api/chirps", apiCfg.Chirps)
+	httpMux.HandleFunc("GET /api/chirps", apiCfg.Chirps)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.resetHandler)
 
@@ -83,7 +86,7 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 }
 
-func (cfg *apiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	msg, err := io.ReadAll(r.Body)
@@ -108,23 +111,31 @@ func (cfg *apiConfig) Chirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//bodyCleaned, isCleaned := removeBadWords(params.Body)
-
 	type responseBody struct {
 		ID   int    `json:"id"`
 		Body string `json:"cleaned_body"`
 	}
 
-	/* if isCleaned {
-		respondWithJson(w, 200, responseBody{
-			Body: bodyCleaned,
-		})
+	db, err := database.NewDB("/database")
+	if err != nil {
+		fmt.Println("Impossible to create db: ", err)
+		return
+	}
+
+	chirp, err := db.CreateChirp(params.Body)
+	if err != nil {
+		fmt.Println("Could not create chirp ", err)
 		return
 	}
 
 	respondWithJson(w, 200, responseBody{
-		Body: bodyCleaned,
-	}) */
+		ID:   chirp.ID,
+		Body: params.Body,
+	})
+}
+
+func (cfg *apiConfig) GetChirps() []database.Chirp {
+	return []database.Chirp{}
 }
 
 func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {
