@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 
@@ -16,6 +18,10 @@ func main() {
 
 	// Create your apiConfig instance
 	apiCfg := &apiConfig{}
+
+	// Configurer le logger pour écrire sur stderr
+	log.SetOutput(os.Stderr)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	// Properly wrap the file server with middleware
 	fileServer := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
@@ -31,8 +37,8 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	httpMux.HandleFunc("POST /api/chirps", apiCfg.Chirps)
-	httpMux.HandleFunc("GET /api/chirps", apiCfg.Chirps)
+	httpMux.HandleFunc("POST /api/chirps", apiCfg.CreateChirps)
+	httpMux.HandleFunc("GET /api/chirps", apiCfg.GetChirps)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.resetHandler)
 
@@ -116,7 +122,7 @@ func (cfg *apiConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		Body string `json:"cleaned_body"`
 	}
 
-	db, err := database.NewDB("/database")
+	db, err := database.NewDB("database.txt")
 	if err != nil {
 		fmt.Println("Impossible to create db: ", err)
 		return
@@ -134,8 +140,8 @@ func (cfg *apiConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (cfg *apiConfig) GetChirps() []database.Chirp {
-	return []database.Chirp{}
+func (cfg *apiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {
