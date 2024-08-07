@@ -122,7 +122,7 @@ func (cfg *apiConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := database.NewDB("database.txt")
+	db, err := database.NewDB("database.json")
 	if err != nil {
 		fmt.Println("Impossible to create db: ", err)
 		return
@@ -141,7 +141,7 @@ func (cfg *apiConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
-	db, err := database.NewDB("database.txt")
+	db, err := database.NewDB("database.json")
 	if err != nil {
 		fmt.Println("Impossible to get db: ", err)
 		return
