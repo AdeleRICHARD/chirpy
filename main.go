@@ -58,6 +58,11 @@ type apiConfig struct {
 	fileserverHits int
 }
 
+type responseBody struct {
+	ID   int    `json:"id"`
+	Body string `json:"body"`
+}
+
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits++
@@ -117,11 +122,6 @@ func (cfg *apiConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type responseBody struct {
-		ID   int    `json:"id"`
-		Body string `json:"cleaned_body"`
-	}
-
 	db, err := database.NewDB("database.txt")
 	if err != nil {
 		fmt.Println("Impossible to create db: ", err)
@@ -134,14 +134,25 @@ func (cfg *apiConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJson(w, 200, responseBody{
+	respondWithJson(w, 201, responseBody{
 		ID:   chirp.ID,
 		Body: params.Body,
 	})
 }
 
 func (cfg *apiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
+	db, err := database.NewDB("database.txt")
+	if err != nil {
+		fmt.Println("Impossible to get db: ", err)
+		return
+	}
 
+	if chirps, err := db.GetChirp(); err == nil {
+		respondWithJson(w, 200, chirps)
+		return
+	}
+
+	respondWithError(w, 410, "no chirps found in the database")
 }
 
 func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {

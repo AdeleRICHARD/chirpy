@@ -14,7 +14,7 @@ type DB struct {
 }
 
 type DBStructure struct {
-	Chirps map[int]Chirp `json:"chirps"`
+	Chirps []Chirp `json:"chirps"`
 }
 
 type Chirp struct {
@@ -46,11 +46,9 @@ func (db *DB) CreateChirp(body string) (*Chirp, error) {
 		return nil, err
 	}
 
-	println(len(dbStructure.Chirps))
-
+	maxID := 0
 	if len(dbStructure.Chirps) > 0 {
 		// Find the highest ID
-		maxID := 0
 		for _, chirp := range dbStructure.Chirps {
 			if chirp.ID > maxID {
 				maxID = chirp.ID
@@ -63,7 +61,7 @@ func (db *DB) CreateChirp(body string) (*Chirp, error) {
 	newChirp.Body = body
 
 	// Add chirp to db structure
-	dbStructure.Chirps[newChirp.ID] = newChirp
+	dbStructure.Chirps = append(dbStructure.Chirps, newChirp)
 
 	if err := db.writeDB(dbStructure); err != nil {
 		return nil, err
@@ -76,8 +74,8 @@ func (db *DB) CreateChirp(body string) (*Chirp, error) {
 }
 
 // GetChirps returns all chirps in the database
-func (db *DB) GetChirp() (map[int]Chirp, error) {
-	db.mux.RLocker()
+func (db *DB) GetChirp() ([]Chirp, error) {
+	db.mux.RLock()
 	defer db.mux.RUnlock()
 
 	dbStructure, err := db.loadDB()
@@ -96,7 +94,7 @@ func (db *DB) ensureDB() error {
 
 	if _, err := os.Stat(db.path); os.IsNotExist(err) {
 		// File does not exist, create it
-		initialDB := DBStructure{Chirps: make(map[int]Chirp)}
+		initialDB := DBStructure{Chirps: make([]Chirp, 0)}
 		data, err := json.Marshal(initialDB)
 		if err != nil {
 			return ErrDBNotCreated
