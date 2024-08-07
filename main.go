@@ -39,6 +39,7 @@ func main() {
 
 	httpMux.HandleFunc("POST /api/chirps", apiCfg.CreateChirps)
 	httpMux.HandleFunc("GET /api/chirps", apiCfg.GetChirps)
+	httpMux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpFromID)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.resetHandler)
 
@@ -147,12 +148,29 @@ func (cfg *apiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if chirps, err := db.GetChirp(); err == nil {
+	if chirps, err := db.GetChirps(); err == nil {
 		respondWithJson(w, 200, chirps)
 		return
 	}
 
 	respondWithError(w, 410, "no chirps found in the database")
+}
+
+func (cfg *apiConfig) getChirpFromID(w http.ResponseWriter, r *http.Request) {
+	db, err := database.NewDB("database.json")
+	if err != nil {
+		fmt.Println("Impossible to get db: ", err)
+		return
+	}
+
+	chirpID := r.PathValue("chirpID")
+
+	if chirp, err := db.GetChirp(chirpID); err == nil {
+		respondWithJson(w, 200, chirp)
+		return
+	}
+
+	respondWithError(w, 404, fmt.Sprintf("no chirp found in the database for this id : %s", chirpID))
 }
 
 func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {

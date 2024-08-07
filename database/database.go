@@ -3,8 +3,10 @@ package database
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 )
 
@@ -74,7 +76,7 @@ func (db *DB) CreateChirp(body string) (*Chirp, error) {
 }
 
 // GetChirps returns all chirps in the database
-func (db *DB) GetChirp() ([]Chirp, error) {
+func (db *DB) GetChirps() ([]Chirp, error) {
 	db.mux.RLock()
 	defer db.mux.RUnlock()
 
@@ -84,7 +86,31 @@ func (db *DB) GetChirp() ([]Chirp, error) {
 	}
 
 	return dbStructure.Chirps, nil
+}
 
+func (db *DB) GetChirp(chirpID string) (*Chirp, error) {
+	db.mux.RLock()
+	defer db.mux.RUnlock()
+
+	if chirpID == "" {
+		return nil, errors.New("no chirp id given")
+	}
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, chirp := range dbStructure.Chirps {
+		chirpIDInt, err := strconv.Atoi(chirpID)
+		if err != nil {
+			return nil, err
+		}
+		if chirp.ID == chirpIDInt {
+			return &chirp, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no chirp found for this id: %s", chirpID)
 }
 
 // ensureDB creates a new database file if it doesn't exist
