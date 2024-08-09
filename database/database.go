@@ -17,11 +17,17 @@ type DB struct {
 
 type DBStructure struct {
 	Chirps []Chirp `json:"chirps"`
+	Users  []User  `json:"users"`
 }
 
 type Chirp struct {
 	ID   int    `json:"id"`
 	Body string `json:"body"`
+}
+
+type User struct {
+	ID    int    `json:"id"`
+	Email string `json:"email"`
 }
 
 // NewDB creates a new database connection
@@ -72,6 +78,39 @@ func (db *DB) CreateChirp(body string) (*Chirp, error) {
 	log.Println("Chirp created")
 
 	return &newChirp, nil
+
+}
+
+func (db *DB) CreateUser(email string) (*User, error) {
+	var newUser User
+	dbStructure, err := db.loadDB()
+	if errors.Is(err, ErrDBNotCreated) {
+		return nil, err
+	}
+
+	maxID := 0
+	if len(dbStructure.Users) > 0 {
+		// Find the highest ID
+		for _, user := range dbStructure.Users {
+			if user.ID > maxID {
+				maxID = user.ID
+			}
+		}
+		newUser.ID = maxID + 1
+	} else {
+		newUser.ID = 1
+	}
+
+	newUser.Email = email
+	dbStructure.Users = append(dbStructure.Users, newUser)
+
+	if err := db.writeDB(dbStructure); err != nil {
+		return nil, err
+	}
+
+	log.Println("User created")
+
+	return &newUser, nil
 
 }
 
