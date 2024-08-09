@@ -20,6 +20,11 @@ type responseBody struct {
 	Body string `json:"body"`
 }
 
+type responseBodyUser struct {
+	ID    int    `json:"id"`
+	Email string `json:"email"`
+}
+
 func (cfg *ApiCfg) MiddlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits++
@@ -139,7 +144,7 @@ func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type requestBody struct {
-		Body string `json:"body"`
+		Email string `json:"email"`
 	}
 
 	params := requestBody{}
@@ -155,15 +160,15 @@ func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chirp, err := db.CreateChirp(params.Body)
+	user, err := db.CreateUser(params.Email)
 	if err != nil {
-		fmt.Println("Could not create chirp ", err)
+		fmt.Println("Could not create user 0", err)
 		return
 	}
 
-	respondWithJson(w, 201, responseBody{
-		ID:   chirp.ID,
-		Body: params.Body,
+	respondWithJson(w, 201, responseBodyUser{
+		ID:    user.ID,
+		Email: params.Email,
 	})
 }
 
