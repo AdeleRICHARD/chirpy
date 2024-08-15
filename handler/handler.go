@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/AdeleRICHARD/database"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type ApiCfg struct {
@@ -144,7 +145,51 @@ func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type requestBody struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	params := requestBody{}
+	err = json.Unmarshal(msg, &params)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+
+	pwdEncrypted, err := bcrypt.GenerateFromPassword([]byte(params.Password), 4)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("An error happened while encrypting %v", err))
+	}
+	db, err := database.NewDB("database.json")
+	if err != nil {
+		fmt.Println("Impossible to create db: ", err)
+		return
+	}
+
+	user, err := db.CreateUser(params.Email, pwdEncrypted)
+	if err != nil {
+		fmt.Println("Could not create user 0", err)
+		return
+	}
+
+	respondWithJson(w, 201, responseBodyUser{
+		ID:    user.ID,
+		Email: params.Email,
+	})
+}
+
+func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	msg, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+
+	type requestBody struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	params := requestBody{}
@@ -160,15 +205,14 @@ func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := db.CreateUser(params.Email)
+	user, err := db.GetUser(params.Password)
 	if err != nil {
-		fmt.Println("Could not create user 0", err)
-		return
+		respondWithError(w, 401, "Unauthorized")
 	}
 
-	respondWithJson(w, 201, responseBodyUser{
+	respondWithJson(w, 200, responseBodyUser{
 		ID:    user.ID,
-		Email: params.Email,
+		Email: user.Email,
 	})
 }
 

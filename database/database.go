@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strconv"
 	"sync"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type DB struct {
@@ -26,8 +29,9 @@ type Chirp struct {
 }
 
 type User struct {
-	ID    int    `json:"id"`
-	Email string `json:"email"`
+	ID       int    `json:"id"`
+	Email    string `json:"email"`
+	Password []byte `json:"password"`
 }
 
 // NewDB creates a new database connection
@@ -81,7 +85,7 @@ func (db *DB) CreateChirp(body string) (*Chirp, error) {
 
 }
 
-func (db *DB) CreateUser(email string) (*User, error) {
+func (db *DB) CreateUser(email string, pwd []byte) (*User, error) {
 	var newUser User
 	dbStructure, err := db.loadDB()
 	if errors.Is(err, ErrDBNotCreated) {
@@ -102,6 +106,7 @@ func (db *DB) CreateUser(email string) (*User, error) {
 	}
 
 	newUser.Email = email
+	newUser.Password = pwd
 	dbStructure.Users = append(dbStructure.Users, newUser)
 
 	if err := db.writeDB(dbStructure); err != nil {
@@ -207,4 +212,26 @@ func (db *DB) writeDB(dbStructure DBStructure) error {
 	}
 
 	return nil
+}
+
+func (db *DB) GetUser(pwd string) (User, error) {
+	dbData, err := db.loadDB()
+	if err != nil {
+		return User{}, err
+	}
+
+	found := slices.IndexFunc(dbData.Users, func(user User) bool {
+		println(user.Email)
+		return bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pwd)) == nil
+	})
+
+	println(found)
+	if found == -1 {
+		return User{}, fmt.Errorf("there is no user for this email : %s", pwd)
+	}
+
+	return User{
+		Email: dbData.Users[found].Email,
+		ID:    dbData.Users[found].ID,
+	}, nil
 }

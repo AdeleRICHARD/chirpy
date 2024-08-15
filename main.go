@@ -36,6 +36,7 @@ func main() {
 	httpMux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.GetChirpFromID)
 
 	httpMux.HandleFunc("POST /api/users", apiCfg.CreateUsers)
+	httpMux.HandleFunc("POST /api/login", apiCfg.Login)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.ResetHandler)
 
