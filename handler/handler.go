@@ -14,6 +14,7 @@ import (
 
 type ApiCfg struct {
 	fileserverHits int
+	JwtSecret      string
 }
 
 type responseBody struct {

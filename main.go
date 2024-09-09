@@ -7,11 +7,17 @@ import (
 	"os"
 
 	"github.com/AdeleRICHARD/handler"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	godotenv.Load()
+	jwtSecret := os.Getenv("JWT_SECRET")
+
 	httpMux := http.NewServeMux()
-	apiCfg := handler.ApiCfg{}
+	apiCfg := handler.ApiCfg{
+		JwtSecret: jwtSecret,
+	}
 
 	// Logger config to write in stdout
 	log.SetOutput(os.Stderr)
