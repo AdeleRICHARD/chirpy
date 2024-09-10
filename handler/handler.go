@@ -12,6 +12,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const DB_PATH string = "database.json"
+
 type ApiCfg struct {
 	fileserverHits int
 	JwtSecret      string
@@ -86,7 +88,7 @@ func (cfg *ApiCfg) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := database.NewDB("database.json")
+	db, err := database.NewDB("DB_PATH ")
 	if err != nil {
 		fmt.Println("Impossible to create db: ", err)
 		return
@@ -105,7 +107,7 @@ func (cfg *ApiCfg) CreateChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
-	db, err := database.NewDB("database.json")
+	db, err := database.NewDB("DB_PATH ")
 	if err != nil {
 		fmt.Println("Impossible to get db: ", err)
 		return
@@ -120,7 +122,7 @@ func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *ApiCfg) GetChirpFromID(w http.ResponseWriter, r *http.Request) {
-	db, err := database.NewDB("database.json")
+	db, err := database.NewDB("DB_PATH ")
 	if err != nil {
 		fmt.Println("Impossible to get db: ", err)
 		return
@@ -161,7 +163,7 @@ func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("An error happened while encrypting %v", err))
 	}
-	db, err := database.NewDB("database.json")
+	db, err := database.NewDB("DB_PATH ")
 	if err != nil {
 		fmt.Println("Impossible to create db: ", err)
 		return

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,6 +18,14 @@ func main() {
 	httpMux := http.NewServeMux()
 	apiCfg := handler.ApiCfg{
 		JwtSecret: jwtSecret,
+	}
+
+	dbg := flag.Bool("debug", false, "Enable debug mode")
+	flag.Parse()
+	if *dbg {
+		if err := os.Remove(handler.DB_PATH); err != nil {
+			log.Fatal("error when deleting database")
+		}
 	}
 
 	// Logger config to write in stdout
