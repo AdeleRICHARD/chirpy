@@ -362,7 +362,6 @@ func createJWTToken(expire, id string, secretKey []byte) (string, error) {
 }
 
 func ConvertExpireTime(expireTime string) int {
-	//expiresAtStr := strconv.Itoa(expireTime)
 	expireTimeInt, err := strconv.Atoi(expireTime)
 	if err != nil {
 		return 0
@@ -370,24 +369,16 @@ func ConvertExpireTime(expireTime string) int {
 	var expiresInSeconds int64
 	const maxExpiration = 24 * time.Hour // 24 heures en durée
 
-	if expireTimeInt == 0 { // Si l'expiration n'est pas spécifiée, utiliser 24 heures par défaut
-		expiresInSeconds = int64(maxExpiration.Seconds()) // 24 heures en secondes
+	if expireTimeInt == 0 {
+		expiresInSeconds = int64(maxExpiration.Seconds())
 	} else {
-		// Convertir expiresAtStr en secondes
-		/* expiresInSecondsInput, err := strconv.ParseInt(expireTime, 10, 64)
-		if err != nil || expiresInSecondsInput <= 0 { // Vérifier si le paramètre est valide
-			return ""
-		} */
-
-		// Vérifier si le temps d'expiration dépasse 24 heures
 		if time.Duration(expireTimeInt)*time.Second > maxExpiration {
-			expiresInSeconds = int64(maxExpiration.Seconds()) // Utiliser 24 heures si dépassement
+			expiresInSeconds = int64(maxExpiration.Seconds())
 		} else {
-			expiresInSeconds = int64(expireTimeInt) // Utiliser le temps d'expiration spécifié par le client
+			expiresInSeconds = int64(expireTimeInt)
 		}
 	}
 
-	// Utiliser expiresInSeconds ici pour les opérations suivantes
 	fmt.Printf("Expiration set to: %d seconds\n", expiresInSeconds)
 
 	return int(expiresInSeconds)
