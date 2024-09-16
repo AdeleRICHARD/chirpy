@@ -6,9 +6,12 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AdeleRICHARD/database"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,7 +19,7 @@ const DB_PATH string = "database.json"
 
 type ApiCfg struct {
 	fileserverHits int
-	JwtSecret      string
+	JwtSecret      []byte
 }
 
 type responseBody struct {
@@ -27,6 +30,7 @@ type responseBody struct {
 type responseBodyUser struct {
 	ID    int    `json:"id"`
 	Email string `json:"email"`
+	Token string `json:"token,omitempty"`
 }
 
 func (cfg *ApiCfg) MiddlewareMetricsInc(next http.Handler) http.Handler {
@@ -88,7 +92,7 @@ func (cfg *ApiCfg) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := database.NewDB("DB_PATH ")
+	db, err := database.NewDB(DB_PATH)
 	if err != nil {
 		fmt.Println("Impossible to create db: ", err)
 		return
@@ -107,7 +111,7 @@ func (cfg *ApiCfg) CreateChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
-	db, err := database.NewDB("DB_PATH ")
+	db, err := database.NewDB(DB_PATH)
 	if err != nil {
 		fmt.Println("Impossible to get db: ", err)
 		return
@@ -122,7 +126,7 @@ func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *ApiCfg) GetChirpFromID(w http.ResponseWriter, r *http.Request) {
-	db, err := database.NewDB("DB_PATH ")
+	db, err := database.NewDB(DB_PATH)
 	if err != nil {
 		fmt.Println("Impossible to get db: ", err)
 		return
@@ -163,7 +167,7 @@ func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("An error happened while encrypting %v", err))
 	}
-	db, err := database.NewDB("DB_PATH ")
+	db, err := database.NewDB(DB_PATH)
 	if err != nil {
 		fmt.Println("Impossible to create db: ", err)
 		return
@@ -181,12 +185,12 @@ func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
+func (cfg *ApiCfg) UpdateUsers(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	msg, err := io.ReadAll(r.Body)
 	if err != nil {
-		respondWithError(w, 500, "Something went wrong")
+		respondWithError(w, 500, "Error in body while updating")
 		return
 	}
 
@@ -198,24 +202,106 @@ func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
 	params := requestBody{}
 	err = json.Unmarshal(msg, &params)
 	if err != nil {
-		respondWithError(w, 500, "Something went wrong")
+		respondWithError(w, 500, "Error while unmarshalling")
 		return
 	}
 
-	db, err := database.NewDB("database.json")
+	db, err := database.NewDB(DB_PATH)
 	if err != nil {
 		fmt.Println("Impossible to create db: ", err)
 		return
 	}
 
-	user, err := db.GetUser(params.Password)
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	claims := &jwt.RegisteredClaims{}
+
+	// Parse the token
+	tokenParsed, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(cfg.JwtSecret), nil
+	})
+
+	if err != nil || !tokenParsed.Valid {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized user")
+		return
+	}
+
+	userId := claims.Subject
+	if userId == "" {
+		respondWithError(w, http.StatusInternalServerError, "No id found in token")
+	}
+
+	newPwdEncrypted, err := bcrypt.GenerateFromPassword([]byte(params.Password), 4)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("An error happened while encrypting %v", err))
+	}
+
+	userUpdated, err := db.UpdateUser(userId, database.User{
+		Email:    params.Email,
+		Password: newPwdEncrypted,
+	})
+
+	if err != nil || userUpdated == nil {
+		respondWithError(w, http.StatusInternalServerError, "No user updated")
+	}
+
+	respondWithJson(w, http.StatusOK, responseBodyUser{
+		Email: userUpdated.Email,
+		ID:    userUpdated.ID,
+	})
+}
+
+func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	msg, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, 500, "Error in body")
+		return
+	}
+
+	type requestBody struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		ExpireAt int    `json:"expires_in_seconds,omitempty"`
+	}
+
+	params := requestBody{}
+	err = json.Unmarshal(msg, &params)
+	if err != nil {
+		respondWithError(w, 500, "Error whil unmarshalling")
+		return
+	}
+
+	db, err := database.NewDB(DB_PATH)
+	if err != nil {
+		fmt.Println("Impossible to create db: ", err)
+		return
+	}
+
+	user, err := db.GetUserByPwd(params.Password)
 	if err != nil {
 		respondWithError(w, 401, "Unauthorized")
 	}
 
+	expireAt := ConvertExpireTime(strconv.Itoa(params.ExpireAt))
+	expireString := strconv.FormatInt(int64(expireAt), 10)
+	if err != nil {
+		respondWithError(w, 400, "Invalid expiration duration")
+		return
+	}
+	if expireAt == 0 {
+		respondWithError(w, 400, "Invalid expiration duration")
+	}
+
+	token, err := createJWTToken(expireString, strconv.Itoa(user.ID), cfg.JwtSecret)
+	if err != nil {
+		fmt.Println(err)
+		respondWithError(w, 500, "Error while querying jwt token")
+	}
 	respondWithJson(w, 200, responseBodyUser{
 		ID:    user.ID,
 		Email: user.Email,
+		Token: token,
 	})
 }
 
@@ -251,4 +337,58 @@ func removeBadWords(sentence string) (string, bool) {
 	}
 
 	return sentence, false
+}
+
+func createJWTToken(expire, id string, secretKey []byte) (string, error) {
+	durationExpire := ConvertExpireTime(expire)
+	if durationExpire == 0 {
+		fmt.Println("ERROR duration")
+		return "", nil
+	}
+	expireDuration := time.Now().Add(time.Duration(durationExpire) * time.Second)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Issuer:    "chirpy",
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+		ExpiresAt: jwt.NewNumericDate(expireDuration),
+		Subject:   id,
+	})
+
+	response, err := token.SignedString(secretKey)
+	if err != nil {
+		return "", err
+	}
+
+	return response, nil
+}
+
+func ConvertExpireTime(expireTime string) int {
+	//expiresAtStr := strconv.Itoa(expireTime)
+	expireTimeInt, err := strconv.Atoi(expireTime)
+	if err != nil {
+		return 0
+	}
+	var expiresInSeconds int64
+	const maxExpiration = 24 * time.Hour // 24 heures en durée
+
+	if expireTimeInt == 0 { // Si l'expiration n'est pas spécifiée, utiliser 24 heures par défaut
+		expiresInSeconds = int64(maxExpiration.Seconds()) // 24 heures en secondes
+	} else {
+		// Convertir expiresAtStr en secondes
+		/* expiresInSecondsInput, err := strconv.ParseInt(expireTime, 10, 64)
+		if err != nil || expiresInSecondsInput <= 0 { // Vérifier si le paramètre est valide
+			return ""
+		} */
+
+		// Vérifier si le temps d'expiration dépasse 24 heures
+		if time.Duration(expireTimeInt)*time.Second > maxExpiration {
+			expiresInSeconds = int64(maxExpiration.Seconds()) // Utiliser 24 heures si dépassement
+		} else {
+			expiresInSeconds = int64(expireTimeInt) // Utiliser le temps d'expiration spécifié par le client
+		}
+	}
+
+	// Utiliser expiresInSeconds ici pour les opérations suivantes
+	fmt.Printf("Expiration set to: %d seconds\n", expiresInSeconds)
+
+	return int(expiresInSeconds)
 }

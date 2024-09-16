@@ -75,7 +75,7 @@ func (db *DB) CreateChirp(body string) (*Chirp, error) {
 	// Add chirp to db structure
 	dbStructure.Chirps = append(dbStructure.Chirps, newChirp)
 
-	if err := db.writeDB(dbStructure); err != nil {
+	if err := db.writeDB(&dbStructure); err != nil {
 		return nil, err
 	}
 
@@ -109,7 +109,7 @@ func (db *DB) CreateUser(email string, pwd []byte) (*User, error) {
 	newUser.Password = pwd
 	dbStructure.Users = append(dbStructure.Users, newUser)
 
-	if err := db.writeDB(dbStructure); err != nil {
+	if err := db.writeDB(&dbStructure); err != nil {
 		return nil, err
 	}
 
@@ -157,6 +157,40 @@ func (db *DB) GetChirp(chirpID string) (*Chirp, error) {
 	return nil, fmt.Errorf("no chirp found for this id: %s", chirpID)
 }
 
+func (db *DB) UpdateUser(id string, params User) (*User, error) {
+	userToUpdate, err := db.GetUserById(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if userToUpdate == nil {
+		return nil, fmt.Errorf("No user found with this id %s", id)
+	}
+
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return nil, err
+	}
+
+	for i, user := range dbStructure.Users {
+		if user.ID == userToUpdate.ID {
+			dbStructure.Users[i].Email = params.Email
+			dbStructure.Users[i].Password = params.Password
+
+			if err := db.writeDB(&dbStructure); err != nil {
+				return nil, err
+			}
+
+			return &User{
+				Email: dbStructure.Users[i].Email,
+				ID:    dbStructure.Users[i].ID,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("User not found")
+}
+
 // ensureDB creates a new database file if it doesn't exist
 func (db *DB) ensureDB() error {
 	db.mux.Lock()
@@ -200,7 +234,7 @@ func (db *DB) loadDB() (DBStructure, error) {
 }
 
 // writeDB writes the database file to disk
-func (db *DB) writeDB(dbStructure DBStructure) error {
+func (db *DB) writeDB(dbStructure *DBStructure) error {
 	data, err := json.Marshal(dbStructure)
 	if err != nil {
 		return err
@@ -214,23 +248,46 @@ func (db *DB) writeDB(dbStructure DBStructure) error {
 	return nil
 }
 
-func (db *DB) GetUser(pwd string) (User, error) {
+func (db *DB) GetUserByPwd(pwd string) (User, error) {
 	dbData, err := db.loadDB()
 	if err != nil {
 		return User{}, err
 	}
 
 	found := slices.IndexFunc(dbData.Users, func(user User) bool {
-		println(user.Email)
 		return bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pwd)) == nil
 	})
 
-	println(found)
 	if found == -1 {
-		return User{}, fmt.Errorf("there is no user for this email : %s", pwd)
+		return User{}, errors.New("there is no user for this email")
 	}
 
 	return User{
+		Email: dbData.Users[found].Email,
+		ID:    dbData.Users[found].ID,
+	}, nil
+}
+
+func (db *DB) GetUserById(id string) (*User, error) {
+	if err := db.ensureDB(); err != nil {
+		return nil, err
+	}
+
+	dbData, err := db.loadDB()
+	if err != nil {
+		return nil, err
+	}
+
+	found := slices.IndexFunc(dbData.Users, func(user User) bool {
+		userId := strconv.Itoa(user.ID)
+		return userId == id
+	})
+
+	if found == -1 {
+		return nil, fmt.Errorf("there is no user for this id : %s", id)
+	}
+
+	return &User{
 		Email: dbData.Users[found].Email,
 		ID:    dbData.Users[found].ID,
 	}, nil

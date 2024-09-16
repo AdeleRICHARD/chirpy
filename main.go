@@ -17,7 +17,7 @@ func main() {
 
 	httpMux := http.NewServeMux()
 	apiCfg := handler.ApiCfg{
-		JwtSecret: jwtSecret,
+		JwtSecret: []byte(jwtSecret),
 	}
 
 	dbg := flag.Bool("debug", false, "Enable debug mode")
@@ -52,6 +52,7 @@ func main() {
 
 	httpMux.HandleFunc("POST /api/users", apiCfg.CreateUsers)
 	httpMux.HandleFunc("POST /api/login", apiCfg.Login)
+	httpMux.HandleFunc("PUT /api/users", apiCfg.UpdateUsers)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.ResetHandler)
 
