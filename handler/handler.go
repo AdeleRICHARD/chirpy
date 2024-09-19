@@ -216,26 +216,21 @@ func (cfg *ApiCfg) UpdateUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	claims := &jwt.RegisteredClaims{}
 
-	// Parse the token
-	tokenParsed, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(cfg.JwtSecret), nil
-	})
-
-	if err != nil || !tokenParsed.Valid {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized user")
-		return
-	}
-
-	userId := claims.Subject
-	if userId == "" {
-		respondWithError(w, http.StatusInternalServerError, "No id found in token")
+	userId, err := cfg.getUserByJWT(token)
+	if err != nil {
+		userid, _, err := db.GetUserRefreshToken(token)
+		if err != nil || userid == 0 {
+			respondWithError(w, http.StatusUnauthorized, "Unauthorized user")
+			return
+		}
+		userId = strconv.Itoa(userid)
 	}
 
 	newPwdEncrypted, err := bcrypt.GenerateFromPassword([]byte(params.Password), 4)
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("An error happened while encrypting %v", err))
+		return
 	}
 
 	userUpdated, err := db.UpdateUser(userId, database.User{
@@ -245,6 +240,7 @@ func (cfg *ApiCfg) UpdateUsers(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil || userUpdated == nil {
 		respondWithError(w, http.StatusInternalServerError, "No user updated")
+		return
 	}
 
 	respondWithJson(w, http.StatusOK, responseBodyUser{
@@ -284,6 +280,7 @@ func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
 	user, err := db.GetUserByPwd(params.Password)
 	if err != nil {
 		respondWithError(w, 401, "Unauthorized")
+		return
 	}
 
 	/* V1
@@ -301,20 +298,23 @@ func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 		respondWithError(w, 500, "Error while querying jwt token")
+		return
 	}
 
 	refreshToken, err := createRefreshToken()
 	if err != nil {
 		respondWithError(w, 500, "Error while creating refresh token")
+		return
 	}
 
+	user.RefreshToken = refreshToken
 	userId := strconv.Itoa(user.ID)
-
 	user.ExpirationToken = time.Now().Add(60 * 24 * time.Hour)
 
 	userDB, err := db.UpdateUser(userId, user)
 	if err != nil {
 		respondWithError(w, 500, "Error while storing refresh token")
+		return
 	}
 
 	respondWithJson(w, 200, responseBodyUser{
@@ -322,6 +322,62 @@ func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
 		Email:        userDB.Email,
 		Token:        token,
 		RefreshToken: refreshToken,
+	})
+}
+
+func (cfg *ApiCfg) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	/* userId, err := cfg.getUserByJWT(token)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized user")
+	} */
+
+	db, err := database.NewDB(DB_PATH)
+	if err != nil {
+		respondWithError(w, 500, "No database created")
+		return
+	}
+
+	userId, found, err := db.GetUserRefreshToken(token)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error while querying database for token")
+		return
+	}
+
+	if !*found {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	strId := strconv.Itoa(userId)
+	user, err := db.GetUserById(strId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "No user found with this id")
+		return
+	}
+
+	if user.RefreshToken == "" || user.ExpirationToken.Compare(time.Now()) == -1 {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized user")
+		return
+	}
+
+	newToken, err := createRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Impossible to create new refresh token")
+		return
+	}
+
+	user.RefreshToken = newToken
+	user.ExpirationToken = time.Now().Add(time.Hour)
+
+	_, err = db.UpdateUser(strId, *user)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error while updating refresh token")
+		return
+	}
+
+	respondWithJson(w, http.StatusOK, responseBodyUser{
+		Token: newToken,
 	})
 }
 
@@ -393,6 +449,26 @@ func createRefreshToken() (string, error) {
 	token := hex.EncodeToString(randomData)
 
 	return token, nil
+}
+
+func (cfg *ApiCfg) getUserByJWT(token string) (string, error) {
+	claims := &jwt.RegisteredClaims{}
+
+	// Parse the token
+	tokenParsed, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(cfg.JwtSecret), nil
+	})
+
+	if err != nil || !tokenParsed.Valid {
+		return "", err
+	}
+
+	userId := claims.Subject
+	if userId == "" {
+		return "", err
+	}
+
+	return userId, nil
 }
 
 // V1

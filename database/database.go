@@ -34,6 +34,7 @@ type User struct {
 	Email           string    `json:"email"`
 	Password        []byte    `json:"password"`
 	ExpirationToken time.Time `json:"expiration_token"`
+	RefreshToken    string    `json:"refresh_token"`
 }
 
 // NewDB creates a new database connection
@@ -178,7 +179,11 @@ func (db *DB) UpdateUser(id string, params User) (*User, error) {
 		if user.ID == userToUpdate.ID {
 			dbStructure.Users[i].Email = params.Email
 			dbStructure.Users[i].Password = params.Password
-			dbStructure.Users[i].ExpirationToken = params.ExpirationToken
+
+			if params.RefreshToken != "" && params.ExpirationToken != (time.Time{}) {
+				dbStructure.Users[i].ExpirationToken = params.ExpirationToken
+				dbStructure.Users[i].RefreshToken = params.RefreshToken
+			}
 
 			if err := db.writeDB(&dbStructure); err != nil {
 				return nil, err
@@ -291,7 +296,38 @@ func (db *DB) GetUserById(id string) (*User, error) {
 	}
 
 	return &User{
-		Email: dbData.Users[found].Email,
-		ID:    dbData.Users[found].ID,
+		Email:           dbData.Users[found].Email,
+		ID:              dbData.Users[found].ID,
+		RefreshToken:    dbData.Users[found].RefreshToken,
+		ExpirationToken: dbData.Users[found].ExpirationToken,
 	}, nil
+}
+
+func (db *DB) GetUserRefreshToken(token string) (int, *bool, error) {
+	if err := db.ensureDB(); err != nil {
+		return 0, nil, err
+	}
+
+	dbData, err := db.loadDB()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	found := slices.IndexFunc(dbData.Users, func(user User) bool {
+		return token == user.RefreshToken
+	})
+
+	tokenOk := new(bool)
+	if found == -1 {
+		*tokenOk = false
+		return 0, tokenOk, nil
+	}
+
+	if dbData.Users[found].ExpirationToken.Compare(time.Now()) == -1 {
+		*tokenOk = false
+		return 0, tokenOk, nil
+	}
+
+	*tokenOk = true
+	return dbData.Users[found].ID, tokenOk, nil
 }
