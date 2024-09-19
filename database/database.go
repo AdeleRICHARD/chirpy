@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -29,9 +30,10 @@ type Chirp struct {
 }
 
 type User struct {
-	ID       int    `json:"id"`
-	Email    string `json:"email"`
-	Password []byte `json:"password"`
+	ID              int       `json:"id"`
+	Email           string    `json:"email"`
+	Password        []byte    `json:"password"`
+	ExpirationToken time.Time `json:"expiration_token"`
 }
 
 // NewDB creates a new database connection
@@ -176,6 +178,7 @@ func (db *DB) UpdateUser(id string, params User) (*User, error) {
 		if user.ID == userToUpdate.ID {
 			dbStructure.Users[i].Email = params.Email
 			dbStructure.Users[i].Password = params.Password
+			dbStructure.Users[i].ExpirationToken = params.ExpirationToken
 
 			if err := db.writeDB(&dbStructure); err != nil {
 				return nil, err

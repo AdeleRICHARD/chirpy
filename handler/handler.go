@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,9 +30,10 @@ type responseBody struct {
 }
 
 type responseBodyUser struct {
-	ID    int    `json:"id"`
-	Email string `json:"email"`
-	Token string `json:"token,omitempty"`
+	ID           int    `json:"id"`
+	Email        string `json:"email"`
+	Token        string `json:"token,omitempty"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (cfg *ApiCfg) MiddlewareMetricsInc(next http.Handler) http.Handler {
@@ -283,6 +286,7 @@ func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 401, "Unauthorized")
 	}
 
+	/* V1
 	expireAt := ConvertExpireTime(strconv.Itoa(params.ExpireAt))
 	expireString := strconv.FormatInt(int64(expireAt), 10)
 	if err != nil {
@@ -291,17 +295,33 @@ func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	if expireAt == 0 {
 		respondWithError(w, 400, "Invalid expiration duration")
-	}
+	} */
 
-	token, err := createJWTToken(expireString, strconv.Itoa(user.ID), cfg.JwtSecret)
+	token, err := createJWTToken(strconv.Itoa(user.ID), cfg.JwtSecret)
 	if err != nil {
 		fmt.Println(err)
 		respondWithError(w, 500, "Error while querying jwt token")
 	}
+
+	refreshToken, err := createRefreshToken()
+	if err != nil {
+		respondWithError(w, 500, "Error while creating refresh token")
+	}
+
+	userId := strconv.Itoa(user.ID)
+
+	user.ExpirationToken = time.Now().Add(60 * 24 * time.Hour)
+
+	userDB, err := db.UpdateUser(userId, user)
+	if err != nil {
+		respondWithError(w, 500, "Error while storing refresh token")
+	}
+
 	respondWithJson(w, 200, responseBodyUser{
-		ID:    user.ID,
-		Email: user.Email,
-		Token: token,
+		ID:           userDB.ID,
+		Email:        userDB.Email,
+		Token:        token,
+		RefreshToken: refreshToken,
 	})
 }
 
@@ -339,17 +359,19 @@ func removeBadWords(sentence string) (string, bool) {
 	return sentence, false
 }
 
-func createJWTToken(expire, id string, secretKey []byte) (string, error) {
-	durationExpire := ConvertExpireTime(expire)
+func createJWTToken(id string, secretKey []byte) (string, error) {
+	/* V1
+	// durationExpire := ConvertExpireTime(expire)
 	if durationExpire == 0 {
 		fmt.Println("ERROR duration")
 		return "", nil
 	}
 	expireDuration := time.Now().Add(time.Duration(durationExpire) * time.Second)
+	*/
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Issuer:    "chirpy",
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
-		ExpiresAt: jwt.NewNumericDate(expireDuration),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		Subject:   id,
 	})
 
@@ -361,13 +383,27 @@ func createJWTToken(expire, id string, secretKey []byte) (string, error) {
 	return response, nil
 }
 
+func createRefreshToken() (string, error) {
+	randomData := make([]byte, 32)
+	_, err := rand.Read(randomData)
+	if err != nil {
+		return "", err
+	}
+
+	token := hex.EncodeToString(randomData)
+
+	return token, nil
+}
+
+// V1
+/*
 func ConvertExpireTime(expireTime string) int {
 	expireTimeInt, err := strconv.Atoi(expireTime)
 	if err != nil {
 		return 0
 	}
 	var expiresInSeconds int64
-	const maxExpiration = 24 * time.Hour // 24 heures en durée
+	const maxExpiration = 24 * time.Hour
 
 	if expireTimeInt == 0 {
 		expiresInSeconds = int64(maxExpiration.Seconds())
@@ -382,4 +418,4 @@ func ConvertExpireTime(expireTime string) int {
 	fmt.Printf("Expiration set to: %d seconds\n", expiresInSeconds)
 
 	return int(expiresInSeconds)
-}
+} */
