@@ -55,6 +55,7 @@ func main() {
 	httpMux.HandleFunc("PUT /api/users", apiCfg.UpdateUsers)
 
 	httpMux.HandleFunc("POST /api/refresh", apiCfg.RefreshToken)
+	httpMux.HandleFunc("POST /api/revoke", apiCfg.RevokeToken)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.ResetHandler)
 

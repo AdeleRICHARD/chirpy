@@ -219,12 +219,8 @@ func (cfg *ApiCfg) UpdateUsers(w http.ResponseWriter, r *http.Request) {
 
 	userId, err := cfg.getUserByJWT(token)
 	if err != nil {
-		userid, _, err := db.GetUserRefreshToken(token)
-		if err != nil || userid == 0 {
-			respondWithError(w, http.StatusUnauthorized, "Unauthorized user")
-			return
-		}
-		userId = strconv.Itoa(userid)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized user")
+		return
 	}
 
 	newPwdEncrypted, err := bcrypt.GenerateFromPassword([]byte(params.Password), 4)
@@ -233,10 +229,16 @@ func (cfg *ApiCfg) UpdateUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userUpdated, err := db.UpdateUser(userId, database.User{
-		Email:    params.Email,
-		Password: newPwdEncrypted,
-	})
+	user, err := db.GetUserById(userId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "No user to update")
+		return
+	}
+
+	user.Email = params.Email
+	user.Password = newPwdEncrypted
+
+	userUpdated, err := db.UpdateUser(userId, *user)
 
 	if err != nil || userUpdated == nil {
 		respondWithError(w, http.StatusInternalServerError, "No user updated")
@@ -327,11 +329,6 @@ func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *ApiCfg) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	/* userId, err := cfg.getUserByJWT(token)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized user")
-	} */
-
 	db, err := database.NewDB(DB_PATH)
 	if err != nil {
 		respondWithError(w, 500, "No database created")
@@ -361,24 +358,49 @@ func (cfg *ApiCfg) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newToken, err := createRefreshToken()
+	newToken, err := createJWTToken(strId, cfg.JwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Impossible to create new refresh token")
-		return
-	}
-
-	user.RefreshToken = newToken
-	user.ExpirationToken = time.Now().Add(time.Hour)
-
-	_, err = db.UpdateUser(strId, *user)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Error while updating refresh token")
 		return
 	}
 
 	respondWithJson(w, http.StatusOK, responseBodyUser{
 		Token: newToken,
 	})
+}
+
+func (cfg *ApiCfg) RevokeToken(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	db, err := database.NewDB(DB_PATH)
+	if err != nil {
+		respondWithError(w, 500, "No database created")
+		return
+	}
+
+	userId, _, err := db.GetUserRefreshToken(token)
+	if err != nil || userId == 0 {
+		respondWithError(w, http.StatusNotFound, "No user found for this token")
+		return
+	}
+
+	strId := strconv.Itoa(userId)
+
+	user, err := db.GetUserById(strId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "No user found for this id")
+		return
+	}
+
+	user.RefreshToken = ""
+	user.ExpirationToken = time.Time{}
+
+	err = db.Delete(*user)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error while revoking token")
+		return
+	}
+
+	respondWithJson(w, http.StatusNoContent, "token sucessfully revoked")
 }
 
 func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {

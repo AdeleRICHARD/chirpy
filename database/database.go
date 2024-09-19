@@ -177,12 +177,15 @@ func (db *DB) UpdateUser(id string, params User) (*User, error) {
 
 	for i, user := range dbStructure.Users {
 		if user.ID == userToUpdate.ID {
-			dbStructure.Users[i].Email = params.Email
-			dbStructure.Users[i].Password = params.Password
 
 			if params.RefreshToken != "" && params.ExpirationToken != (time.Time{}) {
 				dbStructure.Users[i].ExpirationToken = params.ExpirationToken
 				dbStructure.Users[i].RefreshToken = params.RefreshToken
+				dbStructure.Users[i].Email = params.Email
+				dbStructure.Users[i].Password = params.Password
+			} else {
+				dbStructure.Users[i].Email = params.Email
+				dbStructure.Users[i].Password = params.Password
 			}
 
 			if err := db.writeDB(&dbStructure); err != nil {
@@ -197,6 +200,41 @@ func (db *DB) UpdateUser(id string, params User) (*User, error) {
 	}
 
 	return nil, fmt.Errorf("User not found")
+}
+
+func (db *DB) Delete(userToDelete User) error {
+	if err := db.ensureDB(); err != nil {
+		return err
+	}
+
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return err
+	}
+
+	index := slices.IndexFunc(dbStructure.Users, func(u User) bool {
+		return u.ID == userToDelete.ID
+	})
+
+	if index == -1 {
+		return fmt.Errorf("No user found with id %d", userToDelete.ID)
+	}
+
+	if userToDelete.RefreshToken != "" {
+		dbStructure.Users[index].RefreshToken = ""
+		dbStructure.Users[index].ExpirationToken = time.Time{}
+	} else {
+		dbStructure.Users[index].Email = userToDelete.Email
+		dbStructure.Users[index].Password = userToDelete.Password
+		dbStructure.Users[index].RefreshToken = ""
+		dbStructure.Users[index].ExpirationToken = time.Time{}
+	}
+
+	if err := db.writeDB(&dbStructure); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ensureDB creates a new database file if it doesn't exist
