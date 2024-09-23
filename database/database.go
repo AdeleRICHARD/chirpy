@@ -25,8 +25,9 @@ type DBStructure struct {
 }
 
 type Chirp struct {
-	ID   int    `json:"id"`
-	Body string `json:"body"`
+	ID     int    `json:"id"`
+	Body   string `json:"body"`
+	UserId string `json:"author_id"`
 }
 
 type User struct {
@@ -54,7 +55,7 @@ func NewDB(path string) (*DB, error) {
 }
 
 // CreateChirp creates a new chirp and saves it to disk
-func (db *DB) CreateChirp(body string) (*Chirp, error) {
+func (db *DB) CreateChirp(body string, userId int) (*Chirp, error) {
 	var newChirp Chirp
 	dbStructure, err := db.loadDB()
 	if errors.Is(err, ErrDBNotCreated) {
@@ -74,6 +75,7 @@ func (db *DB) CreateChirp(body string) (*Chirp, error) {
 		newChirp.ID = 1
 	}
 	newChirp.Body = body
+	newChirp.UserId = strconv.Itoa(userId)
 
 	// Add chirp to db structure
 	dbStructure.Chirps = append(dbStructure.Chirps, newChirp)

@@ -49,6 +49,7 @@ func main() {
 	httpMux.HandleFunc("POST /api/chirps", apiCfg.CreateChirps)
 	httpMux.HandleFunc("GET /api/chirps", apiCfg.GetChirps)
 	httpMux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.GetChirpFromID)
+	httpMux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.DeleteChirpFromID)
 
 	httpMux.HandleFunc("POST /api/users", apiCfg.CreateUsers)
 	httpMux.HandleFunc("POST /api/login", apiCfg.Login)

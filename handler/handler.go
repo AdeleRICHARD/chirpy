@@ -25,8 +25,9 @@ type ApiCfg struct {
 }
 
 type responseBody struct {
-	ID   int    `json:"id"`
-	Body string `json:"body"`
+	ID       int    `json:"id"`
+	Body     string `json:"body"`
+	AuthorId int    `json:"author_id"`
 }
 
 type responseBodyUser struct {
@@ -101,15 +102,29 @@ func (cfg *ApiCfg) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chirp, err := db.CreateChirp(params.Body)
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+
+	user, err := cfg.userAuthenticated(token, db)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not get infos on user")
+		return
+	}
+
+	if user == nil {
+		respondWithError(w, http.StatusUnauthorized, "User not logged in")
+		return
+	}
+
+	chirp, err := db.CreateChirp(params.Body, user.ID)
 	if err != nil {
 		fmt.Println("Could not create chirp ", err)
 		return
 	}
 
 	respondWithJson(w, 201, responseBody{
-		ID:   chirp.ID,
-		Body: params.Body,
+		ID:       chirp.ID,
+		Body:     params.Body,
+		AuthorId: user.ID,
 	})
 }
 
@@ -438,14 +453,6 @@ func removeBadWords(sentence string) (string, bool) {
 }
 
 func createJWTToken(id string, secretKey []byte) (string, error) {
-	/* V1
-	// durationExpire := ConvertExpireTime(expire)
-	if durationExpire == 0 {
-		fmt.Println("ERROR duration")
-		return "", nil
-	}
-	expireDuration := time.Now().Add(time.Duration(durationExpire) * time.Second)
-	*/
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Issuer:    "chirpy",
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -491,6 +498,24 @@ func (cfg *ApiCfg) getUserByJWT(token string) (string, error) {
 	}
 
 	return userId, nil
+}
+
+func (cfg *ApiCfg) userAuthenticated(token string, db *database.DB) (*database.User, error) {
+	id, err := cfg.getUserByJWT(token)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := db.GetUserById(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if user != nil {
+		return user, nil
+	}
+
+	return nil, nil
 }
 
 // V1
