@@ -46,6 +46,8 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
+	httpMux.HandleFunc("POST /admin/reset", apiCfg.DeleteAllUsers)
+
 	httpMux.HandleFunc("POST /api/chirps", apiCfg.CreateChirps)
 	httpMux.HandleFunc("GET /api/chirps", apiCfg.GetChirps)
 	httpMux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.GetChirpFromID)
@@ -57,6 +59,8 @@ func main() {
 
 	httpMux.HandleFunc("POST /api/refresh", apiCfg.RefreshToken)
 	httpMux.HandleFunc("POST /api/revoke", apiCfg.RevokeToken)
+
+	httpMux.HandleFunc("POST /api/polka/webhooks", apiCfg.HandleWebhook)
 
 	httpMux.HandleFunc("/api/reset", apiCfg.ResetHandler)
 

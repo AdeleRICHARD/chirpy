@@ -36,6 +36,7 @@ type User struct {
 	Password        []byte    `json:"password"`
 	ExpirationToken time.Time `json:"expiration_token"`
 	RefreshToken    string    `json:"refresh_token"`
+	IsRedChirpy     bool      `json:"is_chirpy_red"`
 }
 
 // NewDB creates a new database connection
@@ -112,6 +113,7 @@ func (db *DB) CreateUser(email string, pwd []byte) (*User, error) {
 
 	newUser.Email = email
 	newUser.Password = pwd
+	newUser.IsRedChirpy = false
 	dbStructure.Users = append(dbStructure.Users, newUser)
 
 	if err := db.writeDB(&dbStructure); err != nil {
@@ -195,13 +197,53 @@ func (db *DB) UpdateUser(id string, params User) (*User, error) {
 			}
 
 			return &User{
-				Email: dbStructure.Users[i].Email,
-				ID:    dbStructure.Users[i].ID,
+				Email:       dbStructure.Users[i].Email,
+				ID:          dbStructure.Users[i].ID,
+				IsRedChirpy: dbStructure.Users[i].IsRedChirpy,
 			}, nil
 		}
 	}
 
 	return nil, fmt.Errorf("User not found")
+}
+
+func (db *DB) UpgradeUser(id string) (*User, error) {
+	userToUpdate, err := db.GetUserById(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if userToUpdate == nil {
+		return nil, fmt.Errorf("No user found with this id %s", id)
+	}
+
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return nil, err
+	}
+
+	idToUpgrade, err := strconv.Atoi(id)
+	if err != nil {
+		return nil, err
+	}
+
+	index := db.SearchUser(idToUpgrade, dbStructure.Users)
+	if index == -1 {
+		return nil, fmt.Errorf("No user found with this id %s", id)
+	}
+
+	dbStructure.Users[index].IsRedChirpy = true
+
+	if err := db.writeDB(&dbStructure); err != nil {
+		return nil, err
+	}
+
+	return &User{
+		Email:       dbStructure.Users[index].Email,
+		ID:          dbStructure.Users[index].ID,
+		IsRedChirpy: dbStructure.Users[index].IsRedChirpy,
+	}, nil
+
 }
 
 func (db *DB) Delete(userToDelete User) error {
@@ -397,4 +439,13 @@ func (db *DB) GetUserRefreshToken(token string) (int, *bool, error) {
 
 	*tokenOk = true
 	return dbData.Users[found].ID, tokenOk, nil
+}
+
+func (db *DB) SearchUser(userID int, users []User) int {
+	index := slices.IndexFunc(users, func(u User) bool {
+		return u.ID == userID
+	})
+
+	return index
+
 }

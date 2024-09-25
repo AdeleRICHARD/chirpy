@@ -35,6 +35,7 @@ type responseBodyUser struct {
 	Email        string `json:"email"`
 	Token        string `json:"token,omitempty"`
 	RefreshToken string `json:"refresh_token"`
+	IsRedChirpy  bool   `json:"is_chirpy_red"`
 }
 
 func (cfg *ApiCfg) MiddlewareMetricsInc(next http.Handler) http.Handler {
@@ -66,6 +67,12 @@ func (cfg *ApiCfg) MetricsHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (cfg *ApiCfg) ResetHandler(w http.ResponseWriter, _ *http.Request) {
+	cfg.fileserverHits = 0
+	w.Write([]byte("OK"))
+	w.WriteHeader(200)
+}
+
+func (cfg *ApiCfg) DeleteAllUsers(w http.ResponseWriter, _ *http.Request) {
 	cfg.fileserverHits = 0
 	w.Write([]byte("OK"))
 	w.WriteHeader(200)
@@ -229,8 +236,9 @@ func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJson(w, 201, responseBodyUser{
-		ID:    user.ID,
-		Email: params.Email,
+		ID:          user.ID,
+		Email:       params.Email,
+		IsRedChirpy: user.IsRedChirpy,
 	})
 }
 
@@ -292,8 +300,9 @@ func (cfg *ApiCfg) UpdateUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJson(w, http.StatusOK, responseBodyUser{
-		Email: userUpdated.Email,
-		ID:    userUpdated.ID,
+		Email:       userUpdated.Email,
+		ID:          userUpdated.ID,
+		IsRedChirpy: userUpdated.IsRedChirpy,
 	})
 }
 
@@ -370,6 +379,7 @@ func (cfg *ApiCfg) Login(w http.ResponseWriter, r *http.Request) {
 		Email:        userDB.Email,
 		Token:        token,
 		RefreshToken: refreshToken,
+		IsRedChirpy:  userDB.IsRedChirpy,
 	})
 }
 
@@ -411,7 +421,8 @@ func (cfg *ApiCfg) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJson(w, http.StatusOK, responseBodyUser{
-		Token: newToken,
+		Token:       newToken,
+		IsRedChirpy: user.IsRedChirpy,
 	})
 }
 
@@ -447,6 +458,49 @@ func (cfg *ApiCfg) RevokeToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJson(w, http.StatusNoContent, "token sucessfully revoked")
+}
+
+func (cfg *ApiCfg) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	msg, err := io.ReadAll(r.Body)
+	if err != nil {
+		respondWithError(w, 500, "Error in body")
+		return
+	}
+
+	type requestBody struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserId string `json:"user_id"`
+		} `json:"data"`
+	}
+
+	params := requestBody{}
+	err = json.Unmarshal(msg, &params)
+	if err != nil {
+		respondWithError(w, 500, "Error whil unmarshalling")
+		return
+	}
+
+	if params.Event != "user.upgraded" {
+		respondWithError(w, http.StatusNoContent, "Not the right event")
+		return
+	}
+
+	db, err := database.NewDB(DB_PATH)
+	if err != nil {
+		fmt.Println("Impossible to create db: ", err)
+		return
+	}
+
+	_, err = db.UpgradeUser(params.Data.UserId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "No user upgraded")
+		return
+	}
+
+	respondWithJson(w, http.StatusNoContent, "User upgraded successfully")
 }
 
 func respondWithJson(w http.ResponseWriter, code int, payload interface{}) error {
