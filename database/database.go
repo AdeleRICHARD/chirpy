@@ -239,6 +239,33 @@ func (db *DB) Delete(userToDelete User) error {
 	return nil
 }
 
+func (db *DB) DeleteChirp(chirpToDelete Chirp) error {
+	if err := db.ensureDB(); err != nil {
+		return err
+	}
+
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return err
+	}
+
+	index := slices.IndexFunc(dbStructure.Chirps, func(ch Chirp) bool {
+		return ch.ID == chirpToDelete.ID
+	})
+
+	if index == -1 {
+		return fmt.Errorf("No user found with id %d", chirpToDelete.ID)
+	}
+
+	newChirps := slices.Delete(dbStructure.Chirps, index, index+1)
+	dbStructure.Chirps = newChirps
+	if err := db.writeDB(&dbStructure); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ensureDB creates a new database file if it doesn't exist
 func (db *DB) ensureDB() error {
 	db.mux.Lock()

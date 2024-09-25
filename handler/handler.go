@@ -160,6 +160,37 @@ func (cfg *ApiCfg) GetChirpFromID(w http.ResponseWriter, r *http.Request) {
 	respondWithError(w, 404, fmt.Sprintf("no chirp found in the database for this id : %s", chirpID))
 }
 
+func (cfg *ApiCfg) DeleteChirpFromID(w http.ResponseWriter, r *http.Request) {
+	db, err := database.NewDB(DB_PATH)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "No database created or found")
+	}
+
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+
+	user, err := cfg.userAuthenticated(token, db)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "User not logged in")
+	}
+
+	chirpId := r.PathValue("chirpID")
+	chirp, err := db.GetChirp(chirpId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "No chirps found")
+	}
+
+	if strconv.Itoa(user.ID) == chirp.UserId {
+		err := db.DeleteChirp(*chirp)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Could not delete chirp")
+		}
+		respondWithJson(w, http.StatusNoContent, "Chirps deleted")
+		return
+	}
+
+	respondWithError(w, http.StatusForbidden, "You cannot delete this chirp")
+}
+
 func (cfg *ApiCfg) CreateUsers(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
