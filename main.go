@@ -14,10 +14,12 @@ import (
 func main() {
 	godotenv.Load()
 	jwtSecret := os.Getenv("JWT_SECRET")
+	polkaKey := os.Getenv("POLKA_KEY")
 
 	httpMux := http.NewServeMux()
 	apiCfg := handler.ApiCfg{
 		JwtSecret: []byte(jwtSecret),
+		PolkaKey:  polkaKey,
 	}
 
 	dbg := flag.Bool("debug", false, "Enable debug mode")

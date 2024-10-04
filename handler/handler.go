@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,7 @@ const DB_PATH string = "database.json"
 type ApiCfg struct {
 	fileserverHits int
 	JwtSecret      []byte
+	PolkaKey       string
 }
 
 type responseBody struct {
@@ -136,6 +138,8 @@ func (cfg *ApiCfg) CreateChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
+	authorId := r.URL.Query().Get("author_id")
+
 	db, err := database.NewDB(DB_PATH)
 	if err != nil {
 		fmt.Println("Impossible to get db: ", err)
@@ -143,6 +147,16 @@ func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if chirps, err := db.GetChirps(); err == nil {
+		if authorId != "" {
+			chirpsUser := []database.Chirp{}
+			for _, chirp := range chirps {
+				if chirp.UserId == authorId {
+					chirpsUser = append(chirpsUser, chirp)
+				}
+			}
+			respondWithJson(w, http.StatusOK, chirpsUser)
+			return
+		}
 		respondWithJson(w, 200, chirps)
 		return
 	}
@@ -461,6 +475,13 @@ func (cfg *ApiCfg) RevokeToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *ApiCfg) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+
+	_, err := cfg.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Not authorized")
+		return
+	}
+
 	defer r.Body.Close()
 
 	msg, err := io.ReadAll(r.Body)
@@ -601,6 +622,14 @@ func (cfg *ApiCfg) userAuthenticated(token string, db *database.DB) (*database.U
 	}
 
 	return nil, nil
+}
+
+func (cfg *ApiCfg) GetAPIKey(headers http.Header) (string, error) {
+	apiKey := strings.TrimPrefix(headers.Get("Authorization"), "ApiKey ")
+	if apiKey != cfg.PolkaKey {
+		return "", errors.New("Bad api key")
+	}
+	return apiKey, nil
 }
 
 // V1
