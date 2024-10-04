@@ -25,9 +25,10 @@ type DBStructure struct {
 }
 
 type Chirp struct {
-	ID     int    `json:"id"`
-	Body   string `json:"body"`
-	UserId string `json:"author_id"`
+	ID        int       `json:"id"`
+	Body      string    `json:"body"`
+	UserId    string    `json:"author_id"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type User struct {
@@ -76,6 +77,7 @@ func (db *DB) CreateChirp(body string, userId int) (*Chirp, error) {
 		newChirp.ID = 1
 	}
 	newChirp.Body = body
+	newChirp.CreatedAt = time.Now()
 	newChirp.UserId = strconv.Itoa(userId)
 
 	// Add chirp to db structure

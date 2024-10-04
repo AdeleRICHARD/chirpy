@@ -139,6 +139,7 @@ func (cfg *ApiCfg) CreateChirps(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
 	authorId := r.URL.Query().Get("author_id")
+	sortingType := r.URL.Query().Get("sort")
 
 	db, err := database.NewDB(DB_PATH)
 	if err != nil {
@@ -147,6 +148,30 @@ func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if chirps, err := db.GetChirps(); err == nil {
+		if sortingType != "" {
+			if sortingType == "asc" {
+				slices.SortFunc(chirps, func(chirpI, chirpJ database.Chirp) int {
+					if chirpI.CreatedAt.Before(chirpJ.CreatedAt) {
+						return -1
+					}
+					if chirpI.CreatedAt.After(chirpJ.CreatedAt) {
+						return 1
+					}
+					return 0
+				})
+			} else {
+				slices.SortFunc(chirps, func(chirpI, chirpJ database.Chirp) int {
+					if chirpI.CreatedAt.Before(chirpJ.CreatedAt) {
+						return 1
+					}
+					if chirpI.CreatedAt.After(chirpJ.CreatedAt) {
+						return -1
+					}
+					return 0
+				})
+			}
+		}
+
 		if authorId != "" {
 			chirpsUser := []database.Chirp{}
 			for _, chirp := range chirps {
@@ -154,6 +179,7 @@ func (cfg *ApiCfg) GetChirps(w http.ResponseWriter, r *http.Request) {
 					chirpsUser = append(chirpsUser, chirp)
 				}
 			}
+
 			respondWithJson(w, http.StatusOK, chirpsUser)
 			return
 		}
